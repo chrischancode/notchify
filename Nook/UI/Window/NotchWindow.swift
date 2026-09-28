@@ -39,8 +39,8 @@ class NotchPanel: NSPanel {
         isMovable = false
 
         // Window behavior - stays on all spaces, above menu bar
+        // Note: .fullScreenAuxiliary is omitted so macOS automatically excludes the window from full screen spaces
         collectionBehavior = [
-            .fullScreenAuxiliary,
             .stationary,
             .canJoinAllSpaces,
             .ignoresCycle

@@ -71,6 +71,7 @@ enum AppSettings {
     nonisolated static let musicEdgeGlowEnabledKey = "musicEdgeGlowEnabled"
     nonisolated static let vibeGlowEnabledKey = "vibeGlowEnabled"
     nonisolated static let performanceMonitorEnabledKey = "performanceMonitorEnabled"
+    nonisolated static let hideInFullScreenKey = "hideInFullScreen"
     nonisolated static let musicAbovePerformanceKey = "musicAbovePerformance"
     nonisolated static let performanceVisibleSectionsKey = "performanceVisibleSections"
     nonisolated static let shortcutsKey = "nook_shortcut_bindings"
@@ -85,6 +86,7 @@ enum AppSettings {
         nonisolated static let musicEdgeGlowEnabled = AppSettings.musicEdgeGlowEnabledKey
         nonisolated static let vibeGlowEnabled = AppSettings.vibeGlowEnabledKey
         nonisolated static let performanceMonitorEnabled = AppSettings.performanceMonitorEnabledKey
+        nonisolated static let hideInFullScreen = AppSettings.hideInFullScreenKey
         nonisolated static let musicAbovePerformance = AppSettings.musicAbovePerformanceKey
         nonisolated static let performanceVisibleSections = AppSettings.performanceVisibleSectionsKey
         nonisolated static let autoInstallHooks = "autoInstallHooks"
@@ -102,6 +104,7 @@ enum AppSettings {
             Keys.musicEdgeGlowEnabled: true,
             Keys.vibeGlowEnabled: false,
             Keys.performanceMonitorEnabled: true,
+            Keys.hideInFullScreen: true,
             Keys.musicAbovePerformance: false,
             Keys.performanceVisibleSections: "cpu,memory,battery,network",
             Keys.autoInstallHooks: true,
@@ -303,6 +306,15 @@ enum AppSettings {
     nonisolated static var cursorHooksEnabled: Bool {
         get { defaults.bool(forKey: Keys.cursorHooksEnabled) }
         set { defaults.set(newValue, forKey: Keys.cursorHooksEnabled) }
+    }
+
+    /// Whether to automatically hide Notchify when an app or active space is in full screen.
+    nonisolated static var hideInFullScreen: Bool {
+        get {
+            guard defaults.object(forKey: Keys.hideInFullScreen) != nil else { return true }
+            return defaults.bool(forKey: Keys.hideInFullScreen)
+        }
+        set { defaults.set(newValue, forKey: Keys.hideInFullScreen) }
     }
 
     /// When true, internal log output is mirrored to

@@ -235,7 +235,9 @@ struct NotchView: View {
         .onAppear {
             viewModel.closedNotchExpansionWidth = expansionWidth
             sessionMonitor.startMonitoring()
-            performanceMonitor.setActive(performanceMonitorEnabled)
+            if viewModel.status == .opened {
+                performanceMonitor.setActive(performanceMonitorEnabled)
+            }
             syncInstancesPageLayoutState()
             handleProcessingChange()
             syncVisibilityForVibeGlow()
@@ -246,6 +248,11 @@ struct NotchView: View {
         }
         .onChange(of: viewModel.status) { oldStatus, newStatus in
             handleStatusChange(from: oldStatus, to: newStatus)
+            if newStatus == .opened {
+                performanceMonitor.setActive(performanceMonitorEnabled)
+            } else if newStatus == .closed {
+                performanceMonitor.setActive(false)
+            }
         }
         .onChange(of: sessionMonitor.pendingInstances) { _, sessions in
             handlePendingSessionsChange(sessions)
@@ -784,9 +791,9 @@ struct NotchView: View {
                                 // confirmed working as intended across
                                 // all multi-agent scenarios. See PROGRESS.md.
                                 let active = activeProcessingProviders
+                                guard active.count > 1 else { return }
                                 let activeDesc = active.map { $0.rawValue }.joined(separator: ",")
                                 DebugLog.shared.write("[carousel] tick active=[\(activeDesc)] count=\(active.count) currentFront=\(carouselFront?.rawValue ?? "nil")")
-                                guard active.count > 1 else { return }
                                 // If the cached front is no longer in the
                                 // active set (provider stopped since last
                                 // tick), reset to the current first active

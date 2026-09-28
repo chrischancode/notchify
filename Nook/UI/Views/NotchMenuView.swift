@@ -27,11 +27,12 @@ struct NotchMenuView: View {
     @AppStorage(AppSettings.notchAppearanceStyleKey) private var notchAppearanceStyleRaw = NotchAppearanceStyle.adaptiveArtwork.rawValue
     @AppStorage(AppSettings.musicEdgeGlowEnabledKey) private var musicEdgeGlowEnabled = true
     @AppStorage(AppSettings.vibeGlowEnabledKey) private var vibeGlowEnabled = false
+    @AppStorage(AppSettings.hideInFullScreenKey) private var hideInFullScreen = true
     @AppStorage("cameraEnabled") private var cameraEnabled: Bool = false
 
-    /// Compile-time layout for the menu page. 13 visible rows + 4 dividers
+    /// Compile-time layout for the menu page. 14 visible rows + 4 dividers
     static var pageLayout: PageLayout {
-        PageLayout(rowCount: 13, dividerCount: 4)
+        PageLayout(rowCount: 14, dividerCount: 4)
     }
 
     /// Total height the menu VStack should report, given which pickers
@@ -152,6 +153,18 @@ struct NotchMenuView: View {
                     isFocused: viewModel.settingsFocusedIndex == 7
                 ) {
                     vibeGlowEnabled.toggle()
+                }
+
+                MenuToggleRow(
+                    icon: "arrow.down.right.and.arrow.up.left",
+                    label: "Hide in Full Screen",
+                    isOn: hideInFullScreen,
+                    primaryTextColor: primaryTextColor,
+                    secondaryTextColor: secondaryTextColor,
+                    isFocused: false
+                ) {
+                    hideInFullScreen.toggle()
+                    FullScreenDetector.shared.checkFullScreenStatus()
                 }
 
                 Divider()

@@ -131,6 +131,27 @@ class NotchWindowController: NSWindowController {
         // Register global hotkey (e.g. ⌥⌘L to open notch)
         ShortcutManager.shared.registerGlobalHotkey()
 
+        // Update target screen for fullscreen detector
+        FullScreenDetector.shared.setTargetScreen(screen)
+
+        // Automatically hide notch window when an app or active space is in full screen
+        FullScreenDetector.shared.$isFullScreen
+            .receive(on: DispatchQueue.main)
+            .sink { [weak notchWindow, weak viewModel] isFS in
+                guard let window = notchWindow else { return }
+                if isFS {
+                    if viewModel?.status == .opened {
+                        viewModel?.notchClose()
+                    }
+                    window.orderOut(nil)
+                } else {
+                    if !window.isVisible {
+                        window.orderFront(nil)
+                    }
+                }
+            }
+            .store(in: &cancellables)
+
         // Listen for global hotkey toggle (Carbon) — route through handleShortcutAction
         // to ensure currentChatSession is cleared for instances page.
         NotificationCenter.default.addObserver(
@@ -138,7 +159,12 @@ class NotchWindowController: NSWindowController {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.viewModel.handleShortcutAction(.toggleNotch)
+            guard let self = self else { return }
+            // If hidden due to fullscreen, allow manual hotkey toggle
+            if let window = self.window, !window.isVisible {
+                window.orderFront(nil)
+            }
+            self.viewModel.handleShortcutAction(.toggleNotch)
         }
 
         // Listen for local shortcut actions (routed from ShortcutManager)
