@@ -27,6 +27,7 @@ class NotchPanel: NSPanel {
         // Floating panel behavior
         isFloatingPanel = true
         becomesKeyOnlyIfNeeded = true
+        hidesOnDeactivate = false
 
         // Transparent configuration
         isOpaque = false
@@ -63,6 +64,12 @@ class NotchPanel: NSPanel {
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+
+    // CRITICAL: Prevent AppKit / WindowServer from pushing the window down below the menu bar
+    // into screen.visibleFrame during sleep/wake, resolution changes, or space transitions.
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
+        return frameRect
+    }
 
     // MARK: - Click-through for areas outside the panel content
 

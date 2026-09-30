@@ -93,9 +93,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         windowManager = WindowManager()
         _ = windowManager?.setupNotchWindow()
 
-        screenObserver = ScreenObserver { [weak self] in
-            self?.handleScreenChange()
-        }
+        screenObserver = ScreenObserver(
+            onScreenChange: { [weak self] in
+                self?.handleScreenChange()
+            },
+            onWillSleep: { [weak self] in
+                self?.windowManager?.handleWillSleep()
+            },
+            onDidWake: { [weak self] in
+                self?.windowManager?.handleDidWake()
+            }
+        )
 
     }
 

@@ -244,6 +244,19 @@ struct NotchView: View {
             // On non-notched devices, keep visible so users have a target to interact with
             if !viewModel.hasPhysicalNotch {
                 isVisible = true
+            } else {
+                if viewModel.status == .closed && !vibeGlowVisible && !isAnyProcessing && !hasPendingPermission && !hasWaitingForInput && !showMusicActivity && !activityCoordinator.expandingActivity.show && !PomodoroManager.shared.isRunning {
+                    isVisible = false
+                }
+            }
+        }
+        .onChange(of: viewModel.hasPhysicalNotch) { _, hasNotch in
+            if hasNotch {
+                if viewModel.status == .closed && !vibeGlowVisible && !isAnyProcessing && !hasPendingPermission && !hasWaitingForInput && !showMusicActivity && !activityCoordinator.expandingActivity.show && !PomodoroManager.shared.isRunning {
+                    isVisible = false
+                }
+            } else {
+                isVisible = true
             }
         }
         .onChange(of: viewModel.status) { oldStatus, newStatus in
@@ -1050,7 +1063,10 @@ struct NotchView: View {
             }
         case .closed:
             // Don't hide on non-notched devices - users need a visible target
-            guard viewModel.hasPhysicalNotch else { return }
+            guard viewModel.hasPhysicalNotch else {
+                isVisible = true
+                return
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                 if viewModel.status == .closed && !vibeGlowVisible && !isAnyProcessing && !hasPendingPermission && !hasWaitingForInput && !showMusicActivity && !activityCoordinator.expandingActivity.show && !PomodoroManager.shared.isRunning {
                     isVisible = false

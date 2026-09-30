@@ -144,9 +144,9 @@ class NotchViewModel: ObservableObject {
 
     // MARK: - Geometry
 
-    let geometry: NotchGeometry
+    @Published private(set) var geometry: NotchGeometry
     let spacing: CGFloat = 12
-    let hasPhysicalNotch: Bool
+    @Published private(set) var hasPhysicalNotch: Bool
 
     var deviceNotchRect: CGRect { geometry.deviceNotchRect }
     var screenRect: CGRect { geometry.screenRect }
@@ -299,6 +299,21 @@ class NotchViewModel: ObservableObject {
         )
         self.hasPhysicalNotch = hasPhysicalNotch
         setupEventHandlers()
+    }
+
+    /// Dynamically update screen geometry and physical notch status (e.g. after display change or sleep/wake)
+    func updateGeometry(
+        deviceNotchRect: CGRect,
+        screenRect: CGRect,
+        windowHeight: CGFloat,
+        hasPhysicalNotch: Bool
+    ) {
+        self.geometry = NotchGeometry(
+            deviceNotchRect: deviceNotchRect,
+            screenRect: screenRect,
+            windowHeight: windowHeight
+        )
+        self.hasPhysicalNotch = hasPhysicalNotch
     }
 
     private var instancesPageOpenedHeight: CGFloat {

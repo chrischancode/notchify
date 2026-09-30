@@ -11,7 +11,7 @@ import SwiftUI
 
 class NotchWindowController: NSWindowController {
     let viewModel: NotchViewModel
-    private let screen: NSScreen
+    private(set) var screen: NSScreen
     private var cancellables = Set<AnyCancellable>()
     private var globalMouseMonitor: Any?
     private var localMouseMonitor: Any?
@@ -184,6 +184,42 @@ class NotchWindowController: NSWindowController {
                 self?.viewModel.performBootAnimation()
             }
         }
+    }
+
+    /// Realign window and view model geometry to a given screen (e.g. after sleep/wake or screen change)
+    func realign(screen: NSScreen) {
+        self.screen = screen
+
+        let screenFrame = screen.frame
+        let notchSize = screen.notchSize
+
+        let windowHeight: CGFloat = 750
+        let windowFrame = NSRect(
+            x: screenFrame.origin.x,
+            y: screenFrame.maxY - windowHeight,
+            width: screenFrame.width,
+            height: windowHeight
+        )
+
+        let deviceNotchRect = CGRect(
+            x: (screenFrame.width - notchSize.width) / 2,
+            y: 0,
+            width: notchSize.width,
+            height: notchSize.height
+        )
+
+        viewModel.updateGeometry(
+            deviceNotchRect: deviceNotchRect,
+            screenRect: screenFrame,
+            windowHeight: windowHeight,
+            hasPhysicalNotch: screen.hasPhysicalNotch
+        )
+
+        if let window = self.window {
+            window.setFrame(windowFrame, display: true)
+        }
+
+        FullScreenDetector.shared.setTargetScreen(screen)
     }
 
     required init?(coder: NSCoder) {

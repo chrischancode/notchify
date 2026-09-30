@@ -28,12 +28,28 @@ class WindowManager {
             return nil
         }
 
-        // Skip recreation if screen hasn't meaningfully changed
-        if let existingController = windowController,
-           let existingFrame = currentScreenFrame,
-           existingFrame == screen.frame {
-            logger.debug("Screen unchanged, skipping window recreation")
-            return existingController
+        let screenFrame = screen.frame
+        let windowHeight: CGFloat = 750
+        let expectedWindowFrame = NSRect(
+            x: screenFrame.origin.x,
+            y: screenFrame.maxY - windowHeight,
+            width: screenFrame.width,
+            height: windowHeight
+        )
+
+        // If controller already exists, realign it and skip full recreation if screen hasn't changed
+        if let existingController = windowController {
+            existingController.realign(screen: screen)
+
+            if let window = existingController.window, window.frame != expectedWindowFrame {
+                logger.info("Re-anchoring window frame from \(NSStringFromRect(window.frame)) to \(NSStringFromRect(expectedWindowFrame))")
+                window.setFrame(expectedWindowFrame, display: true)
+            }
+
+            if let existingFrame = currentScreenFrame, existingFrame == screen.frame {
+                logger.debug("Screen frame unchanged, realigned existing window")
+                return existingController
+            }
         }
 
         // Only animate on initial app launch, not on screen changes
@@ -51,5 +67,29 @@ class WindowManager {
         windowController?.showWindow(nil)
 
         return windowController
+    }
+
+    /// Handle system sleep: close open notch and order out window
+    @MainActor
+    func handleWillSleep() {
+        logger.debug("System will sleep - closing notch and ordering out window")
+        if let controller = windowController {
+            if controller.viewModel.status == .opened {
+                controller.viewModel.notchClose()
+            }
+            controller.window?.orderOut(nil)
+        }
+    }
+
+    /// Handle system wake: refresh screens, realign notch window, and restore visibility
+    @MainActor
+    func handleDidWake() {
+        logger.debug("System did wake - refreshing screens and realigning notch window")
+        _ = setupNotchWindow()
+        if let controller = windowController,
+           let window = controller.window,
+           !FullScreenDetector.shared.isFullScreen {
+            window.orderFront(nil)
+        }
     }
 }
