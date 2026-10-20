@@ -964,7 +964,7 @@ enum PomodoroState: Equatable {
 final class PomodoroManager: ObservableObject {
     static let shared = PomodoroManager()
     
-    @Published var state: PomodoroState = .idle
+    @Published private(set) var state: PomodoroState = .idle
     @AppStorage("pomodoroFocusMinutes") var focusMinutes: Int = 25
     @AppStorage("pomodoroBreakMinutes") var breakMinutes: Int = 5
     
@@ -1002,46 +1002,70 @@ final class PomodoroManager: ObservableObject {
     }
     
     func startFocus() {
-        state = .focus(secondsRemaining: max(1, focusMinutes) * 60)
-        startTimer()
+        begin(.focus(secondsRemaining: max(1, focusMinutes) * 60))
     }
     
     func startBreak() {
-        state = .breakTime(secondsRemaining: max(1, breakMinutes) * 60)
-        startTimer()
+        begin(.breakTime(secondsRemaining: max(1, breakMinutes) * 60))
     }
     
     func stop() {
         timer?.invalidate()
         timer = nil
+        phaseEndDate = nil
         state = .idle
+    }
+    
+    /// Countdown is derived from a fixed end date rather than by counting
+    /// ticks, so it stays correct across sleep, App Nap and timer jitter.
+    private var phaseEndDate: Date?
+    
+    private func begin(_ newState: PomodoroState) {
+        let seconds: Int
+        switch newState {
+        case .idle: seconds = 0
+        case .focus(let s), .breakTime(let s): seconds = s
+        }
+        phaseEndDate = Date().addingTimeInterval(TimeInterval(seconds))
+        state = newState
+        startTimer()
     }
     
     private func startTimer() {
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            guard let self = self else { return }
-            self.tick()
+        let newTimer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
+            self?.tick()
         }
+        newTimer.tolerance = 0.1
+        // .common keeps the countdown running while menus or scroll views
+        // are tracking (the default mode pauses during those).
+        RunLoop.main.add(newTimer, forMode: .common)
+        timer = newTimer
     }
     
     private func tick() {
+        guard let end = phaseEndDate else {
+            stop()
+            return
+        }
+        let remaining = Int(end.timeIntervalSinceNow.rounded(.up))
         switch state {
         case .idle:
-            timer?.invalidate()
-        case .focus(let s):
-            if s > 1 {
-                state = .focus(secondsRemaining: s - 1)
+            stop()
+        case .focus:
+            if remaining > 0 {
+                state = .focus(secondsRemaining: remaining)
             } else {
-                stop()
                 NSSound(named: "Glass")?.play()
+                // Focus finished — roll straight into the break.
+                startBreak()
             }
-        case .breakTime(let s):
-            if s > 1 {
-                state = .breakTime(secondsRemaining: s - 1)
+        case .breakTime:
+            if remaining > 0 {
+                state = .breakTime(secondsRemaining: remaining)
             } else {
-                stop()
                 NSSound(named: "Glass")?.play()
+                stop()
             }
         }
     }
@@ -1056,6 +1080,8 @@ struct InstantTooltipModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            // Icon-only controls get their spoken name from the tooltip text.
+            .accessibilityLabel(Text(text))
             .onHover { hovering in
                 withAnimation(.easeInOut(duration: 0.12)) {
                     isHovered = hovering
@@ -1124,7 +1150,6 @@ struct QuickActionButtonView: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
-        .help(tooltipText)
         .instantTooltip(tooltipText, offsetY: 26)
     }
     
@@ -1147,7 +1172,7 @@ struct QuickActionButtonView: View {
             return "Lock Screen (Sleep Display)"
         case .pomodoro:
             if pomodoro.isRunning {
-                return "Pomodoro: \(pomodoro.timeRemainingString) (\(pomodoro.isBreak ? "Break" : "Focus"))"
+                return "\(pomodoro.isBreak ? "Break" : "Focus") \(pomodoro.timeRemainingString) · Click to stop"
             }
             return "Start Pomodoro (\(pomodoro.focusMinutes)m Focus)"
         }
@@ -1205,7 +1230,12 @@ class QuickNotesManager {
         }
         
         DispatchQueue.global(qos: .userInitiated).async {
+            // HTML-escape first (the note body is HTML), then escape for
+            // the AppleScript string literal.
             let escaped = trimmed
+                .replacingOccurrences(of: "&", with: "&amp;")
+                .replacingOccurrences(of: "<", with: "&lt;")
+                .replacingOccurrences(of: ">", with: "&gt;")
                 .replacingOccurrences(of: "\\", with: "\\\\")
                 .replacingOccurrences(of: "\"", with: "\\\"")
                 .replacingOccurrences(of: "\r\n", with: "<br>")
@@ -1262,30 +1292,28 @@ class QuickNotesManager {
             end tell
             """
             
-            // Write script to a temporary .scpt file to prevent shell argument escaping errors
-            let tempFile = FileManager.default.temporaryDirectory.appendingPathComponent("notchify_export_\(UUID().uuidString).scpt")
+            // Write script to a temporary file to avoid shell argument escaping issues.
+            let tempFile = FileManager.default.temporaryDirectory.appendingPathComponent("notchify_export_\(UUID().uuidString).applescript")
+            defer { try? FileManager.default.removeItem(at: tempFile) }
             var success = false
             
             do {
                 try scriptSource.write(to: tempFile, atomically: true, encoding: .utf8)
                 let proc = Process()
+                let output = Pipe()
                 proc.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
                 proc.arguments = [tempFile.path]
+                proc.standardOutput = output
+                proc.standardError = Pipe()
                 try proc.run()
                 proc.waitUntilExit()
-                success = (proc.terminationStatus == 0)
-                try? FileManager.default.removeItem(at: tempFile)
+                // The script returns `noteDone`; exit status 0 alone doesn't
+                // mean a note was actually created.
+                let result = String(data: output.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                success = proc.terminationStatus == 0 && result == "true"
             } catch {
                 success = false
-            }
-            
-            if !success {
-                // Secondary fallback using NSAppleScript
-                var error: NSDictionary?
-                if let script = NSAppleScript(source: scriptSource) {
-                    _ = script.executeAndReturnError(&error)
-                    success = (error == nil)
-                }
             }
             
             DispatchQueue.main.async {
@@ -1304,8 +1332,9 @@ struct QuickNotesFullView: View {
     @AppStorage("quickActionButton1") private var actionButton1Raw: String = QuickActionType.capture.rawValue
     @AppStorage("quickActionButton2") private var actionButton2Raw: String = QuickActionType.lock.rawValue
     @AppStorage("notchifyQuickNotes") private var notesText: String = ""
-    @State private var showSavedAlert = false
+    @State private var exportState: NotesExportState = .idle
     @State private var showCopiedAlert = false
+    @State private var isConfirmingClear = false
     @State private var isShelfTargeted = false
     @State private var isAirDropTargeted = false
     
@@ -1348,7 +1377,6 @@ struct QuickNotesFullView: View {
                         }
                     }
                     .buttonStyle(.plain)
-                    .help(fileManager.files.isEmpty ? "File Shelf (Drop files to hold)" : "File Shelf (\(fileManager.files.count) files)")
                     .instantTooltip(fileManager.files.isEmpty ? "File Shelf" : "File Shelf (\(fileManager.files.count))")
                     .onDrop(of: [.fileURL], isTargeted: $isShelfTargeted) { providers in
                         selectedTab = "files"
@@ -1366,7 +1394,6 @@ struct QuickNotesFullView: View {
                             )
                     }
                     .buttonStyle(.plain)
-                    .help("Instant AirDrop (Drop files to share)")
                     .instantTooltip("Instant AirDrop")
                     .onDrop(of: [.fileURL], isTargeted: $isAirDropTargeted) { providers in
                         selectedTab = "airdrop"
@@ -1382,7 +1409,6 @@ struct QuickNotesFullView: View {
                             .background(Capsule().fill(Color.white.opacity(0.25)))
                     }
                     .buttonStyle(.plain)
-                    .help("Quick Notes")
                     .instantTooltip("Quick Notes")
                 }
                 
@@ -1392,16 +1418,17 @@ struct QuickNotesFullView: View {
                 HStack(spacing: 4) {
                     // Export to Apple Notes button
                     Button(action: saveToNotesApp) {
-                        Image(systemName: showSavedAlert ? "checkmark.circle.fill" : "square.and.arrow.down")
+                        Image(systemName: saveIconName)
                             .font(.system(size: 10.5, weight: .medium))
-                            .foregroundColor(showSavedAlert ? .green : .white.opacity(0.85))
+                            .foregroundColor(saveTint)
                             .frame(width: 28, height: 24)
-                            .background(showSavedAlert ? Color.green.opacity(0.18) : Color.white.opacity(0.08))
+                            .background(saveBackground)
                             .cornerRadius(6)
                     }
                     .buttonStyle(.plain)
-                    .help(showSavedAlert ? "Saved to Apple Notes!" : "Save to Apple Notes app")
-                    .instantTooltip(showSavedAlert ? "Saved to Notes!" : "Save to Apple Notes")
+                    .disabled(isTrimmedEmpty || exportState == .saving)
+                    .opacity(isTrimmedEmpty ? 0.4 : 1)
+                    .instantTooltip(saveTooltip)
                     
                     // Copy to clipboard button
                     Button(action: copyToClipboard) {
@@ -1413,22 +1440,22 @@ struct QuickNotesFullView: View {
                             .cornerRadius(6)
                     }
                     .buttonStyle(.plain)
-                    .help(showCopiedAlert ? "Copied!" : "Copy Notes to Clipboard")
+                    .disabled(isTrimmedEmpty)
+                    .opacity(isTrimmedEmpty ? 0.4 : 1)
                     .instantTooltip(showCopiedAlert ? "Copied!" : "Copy Notes")
                     
-                    // Clear notes button
+                    // Clear notes button — two-step so a stray click can't wipe them
                     if !notesText.isEmpty {
-                        Button(action: { notesText = "" }) {
-                            Image(systemName: "trash")
+                        Button(action: clearNotes) {
+                            Image(systemName: isConfirmingClear ? "trash.fill" : "trash")
                                 .font(.system(size: 10.5, weight: .medium))
-                                .foregroundColor(.white.opacity(0.45))
+                                .foregroundColor(isConfirmingClear ? .red : .white.opacity(0.45))
                                 .frame(width: 28, height: 24)
-                                .background(Color.white.opacity(0.06))
+                                .background(isConfirmingClear ? Color.red.opacity(0.2) : Color.white.opacity(0.06))
                                 .cornerRadius(6)
                         }
                         .buttonStyle(.plain)
-                        .help("Clear Notes")
-                        .instantTooltip("Clear Notes")
+                        .instantTooltip(isConfirmingClear ? "Click again to clear" : "Clear Notes")
                     }
                 }
             }
@@ -1466,19 +1493,78 @@ struct QuickNotesFullView: View {
         )
     }
     
+    private enum NotesExportState {
+        case idle, saving, saved, failed
+    }
+    
+    private var isTrimmedEmpty: Bool {
+        notesText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+    
+    private var saveIconName: String {
+        switch exportState {
+        case .idle: return "square.and.arrow.down"
+        case .saving: return "ellipsis"
+        case .saved: return "checkmark.circle.fill"
+        case .failed: return "exclamationmark.triangle.fill"
+        }
+    }
+    
+    private var saveTint: Color {
+        switch exportState {
+        case .saved: return .green
+        case .failed: return .orange
+        default: return .white.opacity(0.85)
+        }
+    }
+    
+    private var saveBackground: Color {
+        switch exportState {
+        case .saved: return Color.green.opacity(0.18)
+        case .failed: return Color.orange.opacity(0.18)
+        default: return Color.white.opacity(0.08)
+        }
+    }
+    
+    private var saveTooltip: String {
+        switch exportState {
+        case .idle: return "Save to Apple Notes"
+        case .saving: return "Saving…"
+        case .saved: return "Saved to Notes!"
+        case .failed: return "Couldn't reach Notes — copied instead"
+        }
+    }
+    
     private func saveToNotesApp() {
+        exportState = .saving
         QuickNotesManager.shared.exportToAppleNotes(text: notesText) { success in
             withAnimation(.easeInOut(duration: 0.2)) {
-                showSavedAlert = true
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showSavedAlert = false
-                }
+                exportState = success ? .saved : .failed
             }
             if !success {
-                // Also copy to clipboard so note is never lost
+                // Copy to clipboard so the note is never lost
                 copyToClipboard()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    exportState = .idle
+                }
+            }
+        }
+    }
+    
+    private func clearNotes() {
+        if isConfirmingClear {
+            notesText = ""
+            isConfirmingClear = false
+            return
+        }
+        withAnimation(.easeInOut(duration: 0.15)) {
+            isConfirmingClear = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isConfirmingClear = false
             }
         }
     }
@@ -1527,6 +1613,14 @@ class FileShelfManager: ObservableObject {
     
     func clearAll() {
         files.removeAll()
+    }
+
+    /// Drop entries whose file was moved or deleted since it was shelved.
+    func pruneMissingFiles() {
+        let existing = files.filter { FileManager.default.fileExists(atPath: $0.path) }
+        if existing.count != files.count {
+            files = existing
+        }
     }
     
     func airDropFile(url: URL) {
@@ -1651,7 +1745,6 @@ struct StorageShelfColumnView: View {
                         }
                     }
                     .buttonStyle(.plain)
-                    .help(manager.files.isEmpty ? "File Shelf (Drop files to hold)" : "File Shelf (\(manager.files.count) files)")
                     .instantTooltip(manager.files.isEmpty ? "File Shelf" : "File Shelf (\(manager.files.count))")
                     .onDrop(of: [.fileURL], isTargeted: $isShelfTargeted) { providers in
                         selectedTab = "files"
@@ -1671,7 +1764,6 @@ struct StorageShelfColumnView: View {
                             )
                     }
                     .buttonStyle(.plain)
-                    .help("Instant AirDrop (Drop files to share)")
                     .instantTooltip("Instant AirDrop")
                     .onDrop(of: [.fileURL], isTargeted: $isAirDropTargeted) { providers in
                         selectedTab = "airdrop"
@@ -1691,7 +1783,6 @@ struct StorageShelfColumnView: View {
                             )
                     }
                     .buttonStyle(.plain)
-                    .help("Quick Notes (Expand full width)")
                     .instantTooltip("Quick Notes")
 
                     Spacer()
@@ -1706,7 +1797,6 @@ struct StorageShelfColumnView: View {
                                 .cornerRadius(5)
                         }
                         .buttonStyle(.plain)
-                        .help("Clear All Files from Shelf")
                         .instantTooltip("Clear Shelf")
                     }
                 }
@@ -1817,6 +1907,7 @@ struct StorageShelfColumnView: View {
             RoundedRectangle(cornerRadius: 13)
                 .stroke(Color.white.opacity(0.08), lineWidth: 1)
         )
+        .onAppear { manager.pruneMissingFiles() }
     }
 
     private func triggerAirDropPicker() {
@@ -1907,12 +1998,21 @@ struct CompactFileItemView: View {
             RoundedRectangle(cornerRadius: 8)
                 .fill(Color.white.opacity(isHovered ? 0.12 : 0.02))
         )
-        .onHover { hover in
-            isHovered = hover
-            if hover { NSCursor.pointingHand.push() } else { NSCursor.pop() }
-        }
+        .onHover { isHovered = $0 }
+        // pointerStyle is restored automatically when the view goes away;
+        // the old NSCursor push/pop left the hand cursor stuck whenever an
+        // item was removed while hovered.
+        .pointerStyle(.link)
+        .help(url.lastPathComponent)
         .onTapGesture(count: 2) {
             NSWorkspace.shared.open(url)
+        }
+        .contextMenu {
+            Button("Open") { NSWorkspace.shared.open(url) }
+            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+            Button("AirDrop") { FileShelfManager.shared.airDropFile(url: url) }
+            Divider()
+            Button("Remove from Shelf", action: onRemove)
         }
         .onDrag {
             NSItemProvider(object: url as NSURL)
@@ -1993,7 +2093,27 @@ struct MediaCameraColumnView: View {
             // Prominent Camera Mirror (Flipped horizontally like a real mirror)
             ZStack {
                 if cameraEnabled {
-                    if let cgImage = cameraManager.frame {
+                    if cameraManager.permissionDenied {
+                        VStack(spacing: 5) {
+                            Image(systemName: "video.slash.fill")
+                                .font(.system(size: 18))
+                                .foregroundColor(.white.opacity(0.45))
+                            Text("Camera access is off")
+                                .font(.system(size: 9.5, weight: .medium))
+                                .foregroundColor(.white.opacity(0.75))
+                            Button(action: { cameraManager.openPrivacySettings() }) {
+                                Text("Open Settings")
+                                    .font(.system(size: 9.5, weight: .semibold))
+                                    .foregroundColor(.black)
+                                    .padding(.horizontal, 9)
+                                    .padding(.vertical, 3.5)
+                                    .background(Color.white.opacity(0.95))
+                                    .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else if let cgImage = cameraManager.frame {
                         Image(cgImage, scale: 1.0, orientation: .up, label: Text("Mirror"))
                             .resizable()
                             .aspectRatio(contentMode: .fill)
@@ -2011,19 +2131,21 @@ struct MediaCameraColumnView: View {
                     // Live mirror overlay controls
                     VStack {
                         HStack {
-                            HStack(spacing: 3) {
-                                Circle()
-                                    .fill(Color.green)
-                                    .frame(width: 5, height: 5)
-                                Text("Live Mirror")
-                                    .font(.system(size: 8.5, weight: .semibold))
-                                    .foregroundColor(.white)
+                            if cameraManager.frame != nil {
+                                HStack(spacing: 3) {
+                                    Circle()
+                                        .fill(Color.green)
+                                        .frame(width: 5, height: 5)
+                                    Text("Live Mirror")
+                                        .font(.system(size: 8.5, weight: .semibold))
+                                        .foregroundColor(.white)
+                                }
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(Color.black.opacity(0.5))
+                                .clipShape(Capsule())
                             }
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background(Color.black.opacity(0.5))
-                            .clipShape(Capsule())
-                            
+
                             Spacer()
                             
                             Button(action: {

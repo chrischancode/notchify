@@ -15,6 +15,7 @@ class NotchWindowController: NSWindowController {
     private var cancellables = Set<AnyCancellable>()
     private var globalMouseMonitor: Any?
     private var localMouseMonitor: Any?
+    private var notificationObservers: [NSObjectProtocol] = []
 
     init(screen: NSScreen, animateOnLaunch: Bool = true) {
         self.screen = screen
@@ -103,15 +104,7 @@ class NotchWindowController: NSWindowController {
                     notchWindow?.ignoresMouseEvents = true
                     notchWindow?.resignKey()
                     
-                    // Remove autohide monitors
-                    if let global = self.globalMouseMonitor {
-                        NSEvent.removeMonitor(global)
-                        self.globalMouseMonitor = nil
-                    }
-                    if let local = self.localMouseMonitor {
-                        NSEvent.removeMonitor(local)
-                        self.localMouseMonitor = nil
-                    }
+                    self.removeMouseMonitors()
                 }
             }
             .store(in: &cancellables)
@@ -154,7 +147,7 @@ class NotchWindowController: NSWindowController {
 
         // Listen for global hotkey toggle (Carbon) — route through handleShortcutAction
         // to ensure currentChatSession is cleared for instances page.
-        NotificationCenter.default.addObserver(
+        notificationObservers.append(NotificationCenter.default.addObserver(
             forName: .globalToggleNotch,
             object: nil,
             queue: .main
@@ -165,10 +158,10 @@ class NotchWindowController: NSWindowController {
                 window.orderFront(nil)
             }
             self.viewModel.handleShortcutAction(.toggleNotch)
-        }
+        })
 
         // Listen for local shortcut actions (routed from ShortcutManager)
-        NotificationCenter.default.addObserver(
+        notificationObservers.append(NotificationCenter.default.addObserver(
             forName: .shortcutAction,
             object: nil,
             queue: .main
@@ -176,7 +169,7 @@ class NotchWindowController: NSWindowController {
             guard let self = self,
                   let action = notification.object as? ShortcutAction else { return }
             self.viewModel.handleShortcutAction(action)
-        }
+        })
 
         // Perform boot animation after a brief delay (only on initial launch)
         if animateOnLaunch {
@@ -184,6 +177,32 @@ class NotchWindowController: NSWindowController {
                 self?.viewModel.performBootAnimation()
             }
         }
+    }
+
+    private func removeMouseMonitors() {
+        if let global = globalMouseMonitor {
+            NSEvent.removeMonitor(global)
+            globalMouseMonitor = nil
+        }
+        if let local = localMouseMonitor {
+            NSEvent.removeMonitor(local)
+            localMouseMonitor = nil
+        }
+    }
+
+    /// Detach everything that could keep a replaced controller reacting to
+    /// app-wide events (hotkeys, full-screen changes, click-outside monitors).
+    /// Without this, a controller replaced on a screen change can stay alive
+    /// and order its old window back in — the "doubled notch" bug.
+    func tearDown() {
+        cancellables.removeAll()
+        removeMouseMonitors()
+        for observer in notificationObservers {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        notificationObservers.removeAll()
+        window?.orderOut(nil)
+        window?.close()
     }
 
     /// Realign window and view model geometry to a given screen (e.g. after sleep/wake or screen change)

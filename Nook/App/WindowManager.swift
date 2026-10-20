@@ -57,8 +57,7 @@ class WindowManager {
         isInitialLaunch = false
 
         if let existingController = windowController {
-            existingController.window?.orderOut(nil)
-            existingController.window?.close()
+            existingController.tearDown()
             windowController = nil
         }
 

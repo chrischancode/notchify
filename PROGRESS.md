@@ -1,6 +1,6 @@
 # Progress
 
-> Last updated: 2026-08-04 (opencode integration fixes: todo structuredResult, parseImageDataURI, publishState, user prompt fallback)
+> Last updated: 2026-10-20 (Notchify QA pass: camera lifecycle, Pomodoro, Notes export, menu keyboard nav, window teardown)
 
 ## 🎯 Current Focus
 <!-- 2026-07-08 **picker 子项无 sub desc 时高度/垂直对齐修复 + Shortcuts 页面 panel 底部空白修复**（两个 1.3.2 follow-up）：
@@ -38,6 +38,7 @@
 | customIcon type | 2026-06-23 用户决议延后 | AnyView? → `some View` 或 generic MenuRow<Icon: View>。brandIcon 的 switch-case 需要 type-erase 仍然是最大阻力。详见 Context Notes |
 
 ## ✅ Recently Completed
+- **2026-10-20 Notchify QA pass** — `NotchWindowController.tearDown()` detaches sinks/monitors/observers when a window is replaced (doubled-notch root cause: status sink retained `self`); camera start/stop serialized on a session queue with a desired-state flag (camera could stay on after closing the notch) + denied-permission UI; Pomodoro is deadline-based and now rolls into the break; NotchView reacts only to Pomodoro start/stop (was republishing every second); Apple Notes export needs `com.apple.security.automation.apple-events` under hardened runtime, now reports real failures and HTML-escapes; menu keyboard indices realigned (Return on Accessibility used to quit), `menuItemCount` 14, `⌘Q` label restored; full-screen detection checks the window's screen origin; shelf cursor/tooltip/context-menu fixes. Syntax-checked only (`swiftc -parse`); needs a macOS build.
 - **2026-08-04 opencode 用户消息 fallback** — `message.part.updated(type=text)` for user messages never arrives at Nook (socket transport drops it). Added local fallback in `ChatView.sendMessage()` that emits `.opencodePromptSubmitted` immediately after sending via tmux, so the user's prompt appears in the chat view without waiting for the broken opencode text part pipeline. 3 files changed: `SessionEvent.swift`, `SessionStore.swift`, `ChatView.swift`.
 - **2026-07-08 focus 修复 + ⌃O 关 notch + ChatView 日志/文案清理 (1.3.2)** — 三个改动一起:
   - **focus 修复（核心）**：`NotchViewModel.notchClose(restorePreviousApp: Bool = false)`。默认 `false`（安全），快捷键路径（`handleShortcutAction` 的 `.toggleNotch`/`.closeNotch` 分支）显式传 `true`。**关键细节：`previousActiveApp` 在每次 close 时无条件清空**，否则鼠标关闭会留下陈旧引用 → 下次快捷键关闭恢复到错的 app。`restoreFocus()` 私有方法删除（内联到 notchClose 末尾）。
