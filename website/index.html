@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Notchify — a drawer in your MacBook notch</title>
+  <meta name="description" content="Notchify turns your MacBook notch into a small drawer for files, quick notes, AirDrop, music, a camera mirror and a focus timer. Free and open source.">
+  <meta name="theme-color" content="#E7EAEC">
+  <meta property="og:title" content="Notchify — a drawer in your MacBook notch">
+  <meta property="og:description" content="Files, quick notes, AirDrop, music, a mirror and a focus timer, tucked into the notch. Free and open source.">
+  <meta property="og:image" content="/assets/og-icon.png">
+  <link rel="icon" type="image/png" href="/assets/favicon.png">
+  <link rel="apple-touch-icon" href="/assets/icon-256.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Atkinson+Hyperlegible+Next:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <!-- SVG symbol sprite -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-tray" viewBox="0 0 24 24"><path d="M3 13l2.5-7.5A2 2 0 0 1 7.4 4h9.2a2 2 0 0 1 1.9 1.5L21 13v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M3 13h5l1.5 2.5h5L16 13h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+      <symbol id="i-airdrop" viewBox="0 0 24 24"><circle cx="12" cy="13" r="1.8" fill="currentColor"/><path d="M8.5 16.5a5 5 0 1 1 7 0M5.6 19.4a9 9 0 1 1 12.8 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+      <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M13.5 6.5l4 4" stroke="currentColor" stroke-width="1.8"/></symbol>
+      <symbol id="i-timer" viewBox="0 0 24 24"><circle cx="12" cy="13.5" r="7.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 13.5V9.5M10 2.5h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+      <symbol id="i-cup" viewBox="0 0 24 24"><path d="M4 8h12v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V8Z M16 10h1.5a2.5 2.5 0 0 1 0 5H16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+      <symbol id="i-capture" viewBox="0 0 24 24"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5L8 5.5Z" fill="currentColor"/></symbol>
+      <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6.5" y="5.5" width="4" height="13" rx="1" fill="currentColor"/><rect x="13.5" y="5.5" width="4" height="13" rx="1" fill="currentColor"/></symbol>
+      <symbol id="i-video" viewBox="0 0 24 24"><rect x="3" y="6.5" width="12.5" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M15.5 10.5 21 7.5v9l-5.5-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19.5h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-github" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.08.63-1.33-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2.5" fill="currentColor"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+    </defs>
+  </svg>
+
+  <!-- Menu bar with the notch -->
+  <header class="menubar">
+    <a class="brand" href="#top" aria-label="Notchify home">
+      <img src="/assets/icon-256.png" alt="" width="26" height="26">
+      <span>Notchify</span>
+    </a>
+    <nav class="menubar-links" aria-label="Primary">
+      <a href="#features">Features</a>
+      <a href="#install">Install</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <div class="menubar-right">
+      <a class="menubar-github" href="https://github.com/chrischancode/notchify" aria-label="Notchify on GitHub">
+        <svg aria-hidden="true"><use href="#i-github"/></svg>
+        <span>GitHub</span>
+      </a>
+      <a class="btn btn-small" href="https://github.com/chrischancode/notchify/releases/latest/download/Notchify.dmg">
+        <svg aria-hidden="true"><use href="#i-download"/></svg>
+        Download
+      </a>
+    </div>
+  </header>
+
+  <!-- The notch + drawer demo -->
+  <div class="notch-wrap">
+    <div class="notch" id="notch">
+      <button class="notch-handle" id="notchHandle" aria-expanded="false" aria-controls="drawer">
+        <span class="sr">Toggle the Notchify drawer demo</span>
+        <span class="ear ear-left" aria-hidden="true"></span>
+        <span class="ear ear-right" aria-hidden="true"></span>
+      </button>
+
+      <div class="drawer" id="drawer" role="region" aria-label="Notchify drawer demo">
+        <div class="drawer-grid" data-tab="files">
+          <!-- Left column: actions + storage -->
+          <section class="col col-left" aria-label="Storage">
+            <div class="actions">
+              <button class="act" type="button" data-act="capture" aria-label="Capture screenshot"><svg aria-hidden="true"><use href="#i-capture"/></svg></button>
+              <button class="act" type="button" data-act="pomodoro" aria-label="Start a 25 minute focus timer"><svg aria-hidden="true"><use href="#i-timer"/></svg><span class="act-time"></span></button>
+            </div>
+            <div class="tabs" role="tablist" aria-label="Drawer tabs">
+              <button role="tab" aria-selected="true" data-tab="files" aria-label="File shelf"><svg aria-hidden="true"><use href="#i-tray"/></svg></button>
+              <button role="tab" aria-selected="false" data-tab="airdrop" aria-label="AirDrop"><svg aria-hidden="true"><use href="#i-airdrop"/></svg></button>
+              <button role="tab" aria-selected="false" data-tab="notes" aria-label="Quick notes"><svg aria-hidden="true"><use href="#i-pencil"/></svg></button>
+            </div>
+            <div class="pane pane-files" id="shelf" aria-live="polite">
+              <ul class="shelf-list" id="shelfList">
+                <li class="file"><span class="thumb thumb-img"></span><span class="fname">sunset.heic</span></li>
+                <li class="file"><span class="thumb thumb-pdf">PDF</span><span class="fname">invoice.pdf</span></li>
+                <li class="file"><span class="thumb thumb-key">KEY</span><span class="fname">pitch.key</span></li>
+              </ul>
+              <p class="shelf-hint">Drop a file here. It stays on this page.</p>
+            </div>
+            <div class="pane pane-airdrop" hidden>
+              <svg aria-hidden="true"><use href="#i-airdrop"/></svg>
+              <p>Drop files here and they go straight to AirDrop.</p>
+            </div>
+          </section>
+
+          <!-- Right column: music + mirror -->
+          <section class="col col-right" aria-label="Media">
+            <div class="music">
+              <span class="art" aria-hidden="true"></span>
+              <span class="track"><strong>Young Now</strong><span>Nadiane's playlist</span></span>
+              <button class="play" type="button" id="playBtn" aria-label="Play"><svg aria-hidden="true"><use href="#i-play"/></svg></button>
+            </div>
+            <div class="mirror" id="mirror">
+              <video id="mirrorVideo" playsinline muted hidden></video>
+              <div class="mirror-off" id="mirrorOff">
+                <svg aria-hidden="true"><use href="#i-video"/></svg>
+                <button type="button" id="mirrorBtn">Try the mirror</button>
+                <small id="mirrorNote">Uses your webcam. Nothing is recorded.</small>
+              </div>
+              <button type="button" class="mirror-stop" id="mirrorStop" hidden aria-label="Turn off mirror">Off</button>
+            </div>
+          </section>
+
+          <!-- Notes spans both columns -->
+          <section class="pane pane-notes" hidden aria-label="Quick notes">
+            <textarea id="notes" aria-label="Quick notes" placeholder="Jot something down. It saves as you type.">we'll never be as young as we are now</textarea>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <main id="main">
+    <section class="hero" id="top">
+      <h1>Your MacBook notch,<br class="br-wide"> now a tiny drawer.</h1>
+      <p class="lede">Hover the notch to open a drawer for files, quick notes, AirDrop, music, a mirror and a focus timer. Move away and it tucks back in.</p>
+      <div class="cta">
+        <a class="btn" href="https://github.com/chrischancode/notchify/releases/latest/download/Notchify.dmg">
+          <svg aria-hidden="true"><use href="#i-download"/></svg>
+          Download for Mac
+        </a>
+        <a class="btn btn-quiet" href="https://github.com/chrischancode/notchify">
+          <svg aria-hidden="true"><use href="#i-github"/></svg>
+          View source
+        </a>
+      </div>
+      <p class="fineprint">Free and open source under GPL-3.0. Needs macOS 15.6 or later.</p>
+      <p class="demo-hint" id="demoHint">The drawer above is a working demo. Click the notch to close it.</p>
+    </section>
+
+    <section class="closed" aria-labelledby="closed-title">
+      <h2 id="closed-title">Closed, it stays out of the way</h2>
+      <p class="section-lede">When nothing is happening, Notchify is just your notch. When something is, it grows a little to tell you.</p>
+      <ul class="closed-row">
+        <li>
+          <div class="mini-notch" aria-hidden="true"></div>
+          <p><strong>Idle</strong> Looks exactly like the hardware notch.</p>
+        </li>
+        <li>
+          <div class="mini-notch mini-wide" aria-hidden="true">
+            <svg class="mini-icon is-orange"><use href="#i-timer"/></svg>
+            <span class="mini-time">24:50</span>
+          </div>
+          <p><strong>Focus timer</strong> The countdown sits beside the camera while you work.</p>
+        </li>
+        <li>
+          <div class="mini-notch mini-wide" aria-hidden="true">
+            <span class="mini-art"></span>
+            <span class="bars"><i></i><i></i><i></i><i></i></span>
+          </div>
+          <p><strong>Music</strong> Album art and a level meter while a song plays.</p>
+        </li>
+      </ul>
+    </section>
+
+    <section class="features" id="features" aria-labelledby="features-title">
+      <h2 id="features-title">What's in the drawer</h2>
+      <div class="groups">
+        <div class="group">
+          <h3>Hold files</h3>
+          <dl>
+            <div><dt>File shelf</dt>
+            <dd>Drag files in to park them, with real thumbnails. Drag them out again into Finder, Mail or Slack.</dd></div>
+            <div><dt>Instant AirDrop</dt>
+            <dd>Drop files on the AirDrop tab and the share sheet opens with them already attached.</dd></div>
+            <div><dt>Opens when you drag</dt>
+            <dd>Pull a file toward the top of the screen and the drawer opens to catch it.</dd></div>
+          </dl>
+        </div>
+        <div class="group">
+          <h3>Write things down</h3>
+          <dl>
+            <div><dt>Quick notes</dt>
+            <dd>A full-width notepad that saves as you type.</dd></div>
+            <div><dt>Save to Apple Notes</dt>
+            <dd>One click copies the note into Notes, so it syncs to your iPhone over iCloud.</dd></div>
+          </dl>
+        </div>
+        <div class="group">
+          <h3>Stay focused</h3>
+          <dl>
+            <div><dt>Pomodoro timer</dt>
+            <dd>Focus and break sessions with a chime at the end. The countdown stays visible when the drawer is closed.</dd></div>
+            <div><dt>Hides in full screen</dt>
+            <dd>Movies, games and presentations get the whole screen. Notchify steps aside.</dd></div>
+          </dl>
+        </div>
+        <div class="group">
+          <h3>Glance and go</h3>
+          <dl>
+            <div><dt>Music controls</dt>
+            <dd>See what Apple Music or Spotify is playing and pause it without switching apps.</dd></div>
+            <div><dt>Camera mirror</dt>
+            <dd>A quick look before a call, flipped like a real mirror. Off until you turn it on.</dd></div>
+            <div><dt>Two buttons you choose</dt>
+            <dd>Pick any two of Capture, Lock and Pomodoro. Capture hides the drawer before it takes the shot.</dd></div>
+          </dl>
+        </div>
+      </div>
+    </section>
+
+    <section class="install" id="install" aria-labelledby="install-title">
+      <h2 id="install-title">Install in about a minute</h2>
+      <ol class="steps">
+        <li>
+          <h3>Download the disk image</h3>
+          <p>Get <a href="https://github.com/chrischancode/notchify/releases/latest/download/Notchify.dmg">Notchify.dmg</a> and double-click it to open.</p>
+        </li>
+        <li>
+          <h3>Drag it to Applications</h3>
+          <p>Drop Notchify into your Applications folder. There's no installer.</p>
+        </li>
+        <li>
+          <h3>Open it and hover the notch</h3>
+          <p>Launch Notchify from Spotlight. Move your pointer to the notch and the drawer opens.</p>
+        </li>
+      </ol>
+
+      <div class="gatekeeper">
+        <div>
+          <h3>If macOS says it can't verify the developer</h3>
+          <p>Notchify isn't sold through the App Store, so macOS asks first. Right-click the app and choose Open, or run this in Terminal:</p>
+        </div>
+        <div class="cmd">
+          <code id="cmd">xattr -cr /Applications/Notchify.app</code>
+          <button type="button" class="copy" id="copyBtn" aria-label="Copy command">
+            <svg aria-hidden="true"><use href="#i-copy"/></svg>
+            <span>Copy</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="faq" id="faq" aria-labelledby="faq-title">
+      <h2 id="faq-title">Questions</h2>
+      <div class="faq-list">
+        <details>
+          <summary>What is Notchify?</summary>
+          <p>A small macOS app that turns the MacBook notch into a drawer. Hover the notch and you get a file shelf, AirDrop, quick notes, music controls, a camera mirror and a Pomodoro timer.</p>
+        </details>
+        <details>
+          <summary>Is it free?</summary>
+          <p>Yes. Notchify is free and open source under the GPL-3.0 license. There are no ads, subscriptions or in-app purchases.</p>
+        </details>
+        <details>
+          <summary>Does Notchify collect any data?</summary>
+          <p>No. There are no analytics or trackers. Your notes, shelved files and camera image stay on your Mac.</p>
+        </details>
+        <details>
+          <summary>How does saving to Apple Notes work?</summary>
+          <p>In the Notes tab, click the save button and Notchify creates a new note in Apple Notes. The first time, macOS asks whether Notchify may control Notes; choose OK. If it can't reach Notes, the note is copied to your clipboard instead so nothing is lost.</p>
+        </details>
+        <details>
+          <summary>Does the timer keep running when I close the drawer?</summary>
+          <p>Yes. Start a focus session, close the drawer and keep working. The countdown stays next to the notch until the session ends.</p>
+        </details>
+        <details>
+          <summary>Which Macs does it work on?</summary>
+          <p>Any Mac running macOS 15.6 or later. On MacBooks with a notch it lives in the notch; on other displays it shows a small pill at the top of the screen instead.</p>
+        </details>
+        <details>
+          <summary>Why does macOS say it can't verify the developer?</summary>
+          <p>Notchify is distributed outside the App Store. Right-click the app and choose Open, or run <code>xattr -cr /Applications/Notchify.app</code> in Terminal.</p>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <img src="/assets/icon-256.png" alt="" width="40" height="40">
+    <p>Made by Christian Saguirre, for Nadiane. Built on the open-source <a href="https://github.com/oa1mgo/nook">Nook</a> project.</p>
+    <nav aria-label="Downloads and source">
+      <a href="https://github.com/chrischancode/notchify/releases/latest/download/Notchify.dmg">Download .dmg</a>
+      <a href="https://github.com/chrischancode/notchify/releases/latest/download/Notchify.zip">Download .zip</a>
+      <a href="https://github.com/chrischancode/notchify/releases">All releases</a>
+      <a href="https://github.com/chrischancode/notchify">Source code</a>
+    </nav>
+  </footer>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

@@ -161,7 +161,7 @@ struct NotchMenuView: View {
                     isOn: hideInFullScreen,
                     primaryTextColor: primaryTextColor,
                     secondaryTextColor: secondaryTextColor,
-                    isFocused: false
+                    isFocused: viewModel.settingsFocusedIndex == 8
                 ) {
                     hideInFullScreen.toggle()
                     FullScreenDetector.shared.checkFullScreenStatus()
@@ -175,7 +175,7 @@ struct NotchMenuView: View {
                 ActionButtonsPickerRow(
                     primaryTextColor: primaryTextColor,
                     secondaryTextColor: secondaryTextColor,
-                    isFocused: viewModel.settingsFocusedIndex == 8,
+                    isFocused: viewModel.settingsFocusedIndex == 9,
                     isExpanded: $isActionButtonsPickerExpanded,
                     onToggle: { _, _ in
                         markExplicitSet()
@@ -189,7 +189,7 @@ struct NotchMenuView: View {
                     isOn: cameraEnabled,
                     primaryTextColor: primaryTextColor,
                     secondaryTextColor: secondaryTextColor,
-                    isFocused: viewModel.settingsFocusedIndex == 9
+                    isFocused: viewModel.settingsFocusedIndex == 10
                 ) {
                     cameraEnabled.toggle()
                 }
@@ -200,22 +200,12 @@ struct NotchMenuView: View {
                     isOn: launchAtLogin,
                     primaryTextColor: primaryTextColor,
                     secondaryTextColor: secondaryTextColor,
-                    isFocused: viewModel.settingsFocusedIndex == 10
+                    isFocused: viewModel.settingsFocusedIndex == 11
                 ) {
-                    do {
-                        if launchAtLogin {
-                            try SMAppService.mainApp.unregister()
-                            launchAtLogin = false
-                        } else {
-                            try SMAppService.mainApp.register()
-                            launchAtLogin = true
-                        }
-                    } catch {
-                        print("Failed to toggle launch at login: \(error)")
-                    }
+                    toggleLaunchAtLogin()
                 }
 
-                AccessibilityRow(isEnabled: AXIsProcessTrusted(), primaryTextColor: primaryTextColor, secondaryTextColor: secondaryTextColor, isFocused: viewModel.settingsFocusedIndex == 11)
+                AccessibilityRow(isEnabled: AXIsProcessTrusted(), primaryTextColor: primaryTextColor, secondaryTextColor: secondaryTextColor, isFocused: viewModel.settingsFocusedIndex == 12)
 
                 Divider()
                     .background(separatorColor)
@@ -224,10 +214,10 @@ struct NotchMenuView: View {
                 MenuRow(
                     icon: "xmark.circle",
                     label: "Quit",
-                    trailingLabel: "?Q",
+                    trailingLabel: "⌘Q",
                     isDestructive: true,
                     primaryTextColor: primaryTextColor,
-                    isFocused: viewModel.settingsFocusedIndex == 12
+                    isFocused: viewModel.settingsFocusedIndex == 13
                 ) {
                     NSApplication.shared.terminate(nil)
                 }
@@ -246,6 +236,7 @@ struct NotchMenuView: View {
             screenSelector.isPickerExpanded = false
             soundSelector.isPickerExpanded = false
             isAppearancePickerExpanded = false
+            isActionButtonsPickerExpanded = false
             // Re-arm the content-height calibration on every menu re-open.
             // The notification-based measurement will re-converge and
             // write the actual VStack height into menuContentHeight.
@@ -274,6 +265,7 @@ struct NotchMenuView: View {
                 screenSelector.isPickerExpanded = false
                 soundSelector.isPickerExpanded = false
                 isAppearancePickerExpanded = false
+                isActionButtonsPickerExpanded = false
                 // Re-arm the content-height calibration. The notification
                 // subscriber will re-converge and rewrite menuContentHeight
                 // on the next stable measurement.
@@ -309,21 +301,17 @@ struct NotchMenuView: View {
         case 5: toggleAppearancePickerFromKeyboard()
         case 6: musicEdgeGlowEnabled.toggle()
         case 7: vibeGlowEnabled.toggle()
-        case 8: cameraEnabled.toggle()
-        case 9:
-            do {
-                if launchAtLogin {
-                    try SMAppService.mainApp.unregister()
-                    launchAtLogin = false
-                } else {
-                    try SMAppService.mainApp.register()
-                    launchAtLogin = true
-                }
-            } catch {
-                print("Failed to toggle launch at login: \(error)")
+        case 8:
+            hideInFullScreen.toggle()
+            FullScreenDetector.shared.checkFullScreenStatus()
+        case 9: toggleActionButtonsPickerFromKeyboard()
+        case 10: cameraEnabled.toggle()
+        case 11: toggleLaunchAtLogin()
+        case 12:
+            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                NSWorkspace.shared.open(url)
             }
-        case 10: break // Accessibility is read-only
-        case 11: NSApplication.shared.terminate(nil)
+        case 13: NSApplication.shared.terminate(nil)
         default: break
         }
     }
@@ -342,6 +330,28 @@ struct NotchMenuView: View {
     private func toggleSoundPickerFromKeyboard() {
         withAnimation(.easeInOut(duration: 0.2)) {
             soundSelector.isPickerExpanded.toggle()
+            markExplicitSet()
+            viewModel.menuContentHeight = menuContentHeight
+        }
+    }
+
+    private func toggleLaunchAtLogin() {
+        do {
+            if launchAtLogin {
+                try SMAppService.mainApp.unregister()
+                launchAtLogin = false
+            } else {
+                try SMAppService.mainApp.register()
+                launchAtLogin = true
+            }
+        } catch {
+            print("Failed to toggle launch at login: \(error)")
+        }
+    }
+
+    private func toggleActionButtonsPickerFromKeyboard() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            isActionButtonsPickerExpanded.toggle()
             markExplicitSet()
             viewModel.menuContentHeight = menuContentHeight
         }

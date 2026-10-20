@@ -95,6 +95,11 @@ final class FullScreenDetector: ObservableObject {
 
         let screenFrame = screen.frame
         let tolerance: CGFloat = 6.0
+        // CGWindow bounds use a top-left origin anchored to the primary
+        // display; convert so we only match windows on the notch's screen
+        // (an equally sized external display must not count).
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? screenFrame.height
+        let screenOriginInCG = CGPoint(x: screenFrame.minX, y: primaryHeight - screenFrame.maxY)
 
         for window in windowList {
             guard let layer = window[kCGWindowLayer as String] as? Int,
@@ -106,19 +111,16 @@ final class FullScreenDetector: ObservableObject {
                 continue
             }
 
-            // Window must have non-trivial size
-            guard bounds.width > 200 && bounds.height > 200 else { continue }
+            // Window must have non-trivial size and sit on the target screen
+            guard bounds.width > 200 && bounds.height > 200,
+                  abs(bounds.minX - screenOriginInCG.x) <= tolerance,
+                  abs(bounds.minY - screenOriginInCG.y) <= tolerance else { continue }
 
             // Check if window bounds cover the screen dimensions
             let widthDiff = abs(bounds.width - screenFrame.width)
             let heightDiff = abs(bounds.height - screenFrame.height)
 
             if widthDiff <= tolerance && heightDiff <= tolerance {
-                return true
-            }
-
-            // Also check if window spans full height (covering menu bar area)
-            if bounds.height >= screenFrame.height - tolerance && widthDiff <= tolerance {
                 return true
             }
         }

@@ -8,7 +8,6 @@
 
 import Combine
 import Foundation
-import Mixpanel
 import os.log
 
 /// Central state manager for all Claude sessions
@@ -118,10 +117,6 @@ actor SessionStore {
     /// Current running OpenCode plugin version stream (nil until known).
     nonisolated var opencodePluginVersionPublisher: AnyPublisher<String?, Never> {
         opencodePluginVersionSubject.eraseToAnyPublisher()
-    }
-
-    private nonisolated var mixpanel: MixpanelInstance? {
-        Mixpanel.safeMainInstance()
     }
 
     // MARK: - Initialization
@@ -360,9 +355,7 @@ actor SessionStore {
         // view's "Waiting for approval" state will never clear.
         DebugLog.shared.write("[hook-event] session=\(sessionId) event=\(event.event) status=\(event.status) tool=\(event.tool ?? "nil") toolUseId=\(event.toolUseId ?? "nil") notificationType=\(event.notificationType ?? "nil")")
 
-        // Track new session in Mixpanel
         if isNewSession {
-            mixpanel?.track(event: "Session Started")
             registerSession(sessionId: sessionId)
         }
 
@@ -547,10 +540,6 @@ actor SessionStore {
             session.phase = .idle
         }
         sessions[sessionId] = session
-
-        if isNewSession {
-            mixpanel?.track(event: "Session Started", properties: ["provider": "codex"])
-        }
         writeDebugLogAsync("[codex-lifecycle] sessionStart session=\(sessionId) source=\(source ?? "nil") phase=\(String(describing: session.phase)) cwd=\(session.cwd)")
     }
 
@@ -935,14 +924,6 @@ actor SessionStore {
         }
         sessions[sessionId] = session
 
-        // Track "Session Started" even for auto-created sessions —
-        // applyChatItemUpdate fires the Mixpanel event on first creation
-        // but processOpencodeSessionStart may be the first real session
-        // start if the chat-item auto-create was for a different session.
-        if isNewSession {
-            mixpanel?.track(event: "Session Started", properties: ["provider": "opencode"])
-        }
-
         // Probe OpenCode server port if not yet known (plugin's serverPort
         // event may have been lost due to race with socket connection).
         if session.serverPort == nil && opencodeServerPortFallback == nil && opencodeServerPorts.isEmpty {
@@ -1258,10 +1239,6 @@ actor SessionStore {
         if let debugMessage = result.debugMessage {
             writeDebugLogAsync(debugMessage)
         }
-
-        if result.didCreateSession {
-            mixpanel?.track(event: "Session Started", properties: ["provider": "cursor"])
-        }
     }
 
     private nonisolated func writeDebugLogAsync(_ message: String) {
@@ -1308,10 +1285,6 @@ actor SessionStore {
         let isNewSession = sessions[update.sessionId] == nil
         if isNewSession {
             DebugLog.shared.write("[chat-item-update] auto-created session for \(update.sessionId) (pre-sessionStart chat item)")
-            // Fire Mixpanel immediately on auto-create so we never miss
-            // the "Session Started" event even if sessionStart passthrough
-            // arrives later and finds the session already existing.
-            mixpanel?.track(event: "Session Started", properties: ["provider": update.provider.rawValue])
         }
 
         let didApply = ChatItemUpdateReducer.apply(

@@ -158,7 +158,7 @@ struct NotchView: View {
     private var expansionWidth: CGFloat {
         let baseExpansion = 2 * max(0, closedNotchSize.height - 12) + 20
 
-        if PomodoroManager.shared.isRunning {
+        if isPomodoroRunning {
             return max(baseExpansion, 86)
         }
 
@@ -245,14 +245,14 @@ struct NotchView: View {
             if !viewModel.hasPhysicalNotch {
                 isVisible = true
             } else {
-                if viewModel.status == .closed && !vibeGlowVisible && !isAnyProcessing && !hasPendingPermission && !hasWaitingForInput && !showMusicActivity && !activityCoordinator.expandingActivity.show && !PomodoroManager.shared.isRunning {
+                if viewModel.status == .closed && !vibeGlowVisible && !isAnyProcessing && !hasPendingPermission && !hasWaitingForInput && !showMusicActivity && !activityCoordinator.expandingActivity.show && !isPomodoroRunning {
                     isVisible = false
                 }
             }
         }
         .onChange(of: viewModel.hasPhysicalNotch) { _, hasNotch in
             if hasNotch {
-                if viewModel.status == .closed && !vibeGlowVisible && !isAnyProcessing && !hasPendingPermission && !hasWaitingForInput && !showMusicActivity && !activityCoordinator.expandingActivity.show && !PomodoroManager.shared.isRunning {
+                if viewModel.status == .closed && !vibeGlowVisible && !isAnyProcessing && !hasPendingPermission && !hasWaitingForInput && !showMusicActivity && !activityCoordinator.expandingActivity.show && !isPomodoroRunning {
                     isVisible = false
                 }
             } else {
@@ -284,7 +284,8 @@ struct NotchView: View {
             handleProcessingChange()
         }
         .onChange(of: performanceMonitorEnabled) { _, isEnabled in
-            performanceMonitor.setActive(isEnabled)
+            // Sampling only matters while the panel is open (see status handler).
+            performanceMonitor.setActive(isEnabled && viewModel.status == .opened)
             syncInstancesPageLayoutState()
         }
         .onChange(of: cameraEnabled) { _, _ in
@@ -296,19 +297,22 @@ struct NotchView: View {
         .onChange(of: expansionWidth) { _, newValue in
             viewModel.closedNotchExpansionWidth = newValue
         }
-        .onReceive(PomodoroManager.shared.$state) { state in
-            if case .idle = state {
-                if viewModel.status == .closed && viewModel.hasPhysicalNotch {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                        if !PomodoroManager.shared.isRunning && viewModel.status == .closed {
-                            isVisible = false
-                        }
-                    }
-                }
-            } else {
+        // `state` ticks every second; only react to start/stop transitions so
+        // the countdown doesn't republish view-model state (and re-render the
+        // whole notch tree) once a second. The countdown text itself lives in
+        // CompactPomodoroActivityView, which observes the manager directly.
+        .onReceive(PomodoroManager.shared.$state.map { $0 != .idle }.removeDuplicates()) { running in
+            isPomodoroRunning = running
+            if running {
                 isVisible = true
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                     viewModel.closedNotchExpansionWidth = expansionWidth
+                }
+            } else if viewModel.status == .closed && viewModel.hasPhysicalNotch {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    if !isPomodoroRunning && viewModel.status == .closed && !vibeGlowVisible && !isAnyProcessing && !hasPendingPermission && !hasWaitingForInput && !showMusicActivity && !activityCoordinator.expandingActivity.show {
+                        isVisible = false
+                    }
                 }
             }
         }
@@ -565,6 +569,7 @@ struct NotchView: View {
 
     @State private var breathingOpacity: CGFloat = 0.9
     @State private var isDropTargeted: Bool = false
+    @State private var isPomodoroRunning: Bool = false
 
     @ViewBuilder
     private var edgeGlowOverlay: some View {
@@ -694,26 +699,9 @@ struct NotchView: View {
                 }
             }
             .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
-                var droppedURLs: [URL] = []
-                let dispatchGroup = DispatchGroup()
-
-                for provider in providers {
-                    dispatchGroup.enter()
-                    _ = provider.loadObject(ofClass: URL.self) { url, _ in
-                        if let url = url {
-                            DispatchQueue.main.async {
-                                droppedURLs.append(url)
-                            }
-                        }
-                        dispatchGroup.leave()
-                    }
-                }
-
-                dispatchGroup.notify(queue: .main) {
-                    if !droppedURLs.isEmpty {
-                        FileShelfManager.shared.addFiles(droppedURLs)
-                    }
-                }
+                // Show the shelf so the user sees where the files landed.
+                UserDefaults.standard.set("files", forKey: "storageSelectedTab")
+                FileShelfManager.shared.loadAndAddFiles(from: providers)
                 return true
             }
             .onChange(of: isDropTargeted) { _, isTargeted in
@@ -753,7 +741,7 @@ struct NotchView: View {
 
     @ViewBuilder
     private var headerRow: some View {
-        if viewModel.status != .opened && PomodoroManager.shared.isRunning {
+        if viewModel.status != .opened && isPomodoroRunning {
             CompactPomodoroActivityView()
                 .frame(width: closedContentWidth, height: closedNotchSize.height)
         } else if showCompactMusicActivity {
@@ -1068,7 +1056,7 @@ struct NotchView: View {
                 return
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                if viewModel.status == .closed && !vibeGlowVisible && !isAnyProcessing && !hasPendingPermission && !hasWaitingForInput && !showMusicActivity && !activityCoordinator.expandingActivity.show && !PomodoroManager.shared.isRunning {
+                if viewModel.status == .closed && !vibeGlowVisible && !isAnyProcessing && !hasPendingPermission && !hasWaitingForInput && !showMusicActivity && !activityCoordinator.expandingActivity.show && !isPomodoroRunning {
                     isVisible = false
                 }
             }
@@ -1085,7 +1073,7 @@ struct NotchView: View {
                     !hasWaitingForInput &&
                     !showMusicActivity &&
                     !activityCoordinator.expandingActivity.show &&
-                    !PomodoroManager.shared.isRunning {
+                    !isPomodoroRunning {
             isVisible = false
         }
     }

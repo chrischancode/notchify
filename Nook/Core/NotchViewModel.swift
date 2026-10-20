@@ -713,7 +713,7 @@ class NotchViewModel: ObservableObject {
     }
 
     /// Total focusable items in the menu page
-    let menuItemCount: Int = 13
+    let menuItemCount: Int = 14
     /// Total focusable items in the shortcuts page (Back + action rows + Restore)
     var shortcutsItemCount: Int { 1 + ShortcutAction.allCases.count + 1 }
     /// Whether the Claude dir picker inside the Agents page is expanded.
